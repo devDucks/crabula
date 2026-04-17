@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Crabula cute mascot logo">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="75%">
+      <stop offset="0%" stop-color="#1f2a56"/>
+      <stop offset="100%" stop-color="#0a1022"/>
+    </radialGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff9a3c"/>
+      <stop offset="100%" stop-color="#ff5a36"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b8f7ff"/>
+      <stop offset="100%" stop-color="#57d6ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g opacity="0.85" fill="#d7f6ff">
+    <circle cx="92" cy="88" r="3"/>
+    <circle cx="404" cy="102" r="4"/>
+    <circle cx="438" cy="182" r="2"/>
+    <circle cx="118" cy="410" r="3"/>
+    <circle cx="386" cy="396" r="3"/>
+  </g>
+  <g transform="translate(256 282)">
+    <path d="M-152 -18c-22-36-10-72 28-88 36-14 70 4 84 38" fill="none" stroke="#ff8a2d" stroke-width="22" stroke-linecap="round"/>
+    <path d="M152 -18c22-36 10-72-28-88-36-14-70 4-84 38" fill="none" stroke="#ff8a2d" stroke-width="22" stroke-linecap="round"/>
+    <path d="M-170 40l-56 -20M-162 94l-58 28M170 40l56 -20M162 94l58 28" stroke="#ff8a2d" stroke-width="18" stroke-linecap="round"/>
+    <path d="M-110 132l-42 54M-48 150l-22 62M110 132l42 54M48 150l22 62" stroke="#ff8a2d" stroke-width="18" stroke-linecap="round"/>
+    <ellipse rx="138" ry="102" fill="url(#body)"/>
+    <circle cx="-54" cy="-88" r="24" fill="#fff"/>
+    <circle cx="54" cy="-88" r="24" fill="#fff"/>
+    <circle cx="-48" cy="-84" r="10" fill="#111827"/>
+    <circle cx="60" cy="-84" r="10" fill="#111827"/>
+    <circle r="46" fill="#10203c" stroke="url(#lens)" stroke-width="14"/>
+    <circle r="20" fill="#d7fbff" opacity="0.95"/>
+    <path d="M-46 58c20 18 72 18 92 0" fill="none" stroke="#fff6ef" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="-84" cy="18" r="10" fill="#ffbead" opacity="0.8"/>
+    <circle cx="84" cy="18" r="10" fill="#ffbead" opacity="0.8"/>
+  </g>
+</svg>
