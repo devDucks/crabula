@@ -6,12 +6,12 @@ use rfitsio::parsing::parse;
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Crabula - FITS Viewer")
+            .with_title("Crabula - FITS/XISF Viewer")
             .with_inner_size([900.0, 700.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "FITS Viewer",
+        "Crabula - FITS/XISF Viewer",
         options,
         Box::new(|_cc| Ok(Box::new(FitsViewer::default()))),
     )
@@ -162,6 +162,79 @@ impl FitsViewer {
         }
     }
 
+    fn load_xisf(&mut self, path: &std::path::Path, ctx: &egui::Context) {
+        let mut xisf_file = match rxisf::reader::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                self.status = format!("Error: {e}");
+                self.texture = None;
+                self.raw_pixels = None;
+                self.sorted_channels.clear();
+                self.fits_info.clear();
+                return;
+            }
+        };
+
+        if xisf_file.image_count() == 0 {
+            self.status = "No images found in XISF file.".into();
+            self.texture = None;
+            self.raw_pixels = None;
+            self.sorted_channels.clear();
+            self.fits_info.clear();
+            return;
+        }
+
+        match xisf_file.read_image(0) {
+            Err(e) => {
+                self.status = format!("Error reading XISF image: {e}");
+                self.texture = None;
+                self.raw_pixels = None;
+                self.sorted_channels.clear();
+                self.fits_info.clear();
+            }
+            Ok(img) => {
+                let width = img.geometry.width as usize;
+                let height = img.geometry.height as usize;
+                let ch = img.geometry.channel_count as usize;
+                let is_rgb = ch >= 3;
+                let nplanes = if is_rgb { 3 } else { 1 };
+                let plane_size = width * height;
+                let pixels = xisf_pixel_data_to_f32(&img.data, nplanes * plane_size);
+
+                let mut sorted_channels: Vec<Vec<f32>> = Vec::new();
+                for p in 0..nplanes {
+                    let plane = &pixels[p * plane_size..(p + 1) * plane_size];
+                    let mut s: Vec<f32> = plane.iter().copied().filter(|v| v.is_finite()).collect();
+                    s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                    sorted_channels.push(s);
+                }
+
+                self.sorted_channels = sorted_channels;
+                self.raw_nplanes = nplanes;
+                self.raw_width = width;
+                self.raw_height = height;
+                self.raw_pixels = Some(pixels);
+                self.fits_info = extract_xisf_info(&img);
+                self.show_info = true;
+                self.rgb_mode = is_rgb;
+                self.black_pct = 0.5;
+                self.white_pct = 99.5;
+                self.gamma = 1.0;
+                self.zoom = 1.0;
+
+                self.status = format!(
+                    "{}  —  {}×{} px{}",
+                    path.file_name().unwrap_or_default().to_string_lossy(),
+                    width,
+                    height,
+                    if is_rgb { "  (RGB)" } else { "" },
+                );
+
+                self.rebuild_texture(ctx);
+            }
+        }
+    }
+
     /// Re-render the texture from raw pixels using the current slider values.
     fn rebuild_texture(&mut self, ctx: &egui::Context) {
         let pixels = match &self.raw_pixels {
@@ -226,18 +299,29 @@ fn channel_stretch_limits(sorted: &[f32], black_pct: f32, white_pct: f32) -> (f3
 }
 
 impl eframe::App for FitsViewer {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        egui::Panel::top("toolbar").show_inside(ui, |ui| {
             ui.add_space(4.0);
 
             // Row 1 — file controls.
             ui.horizontal(|ui| {
                 if ui.button("Open…").clicked() {
                     if let Some(path) = rfd::FileDialog::new()
+                        .add_filter("Astronomical images", &["fits", "fit", "fts", "xisf"])
                         .add_filter("FITS", &["fits", "fit", "fts"])
+                        .add_filter("XISF", &["xisf"])
                         .pick_file()
                     {
-                        self.load_fits(&path, ctx);
+                        match path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .map(str::to_lowercase)
+                            .as_deref()
+                        {
+                            Some("xisf") => self.load_xisf(&path, &ctx),
+                            _ => self.load_fits(&path, &ctx),
+                        }
                     }
                 }
                 if self.status.is_empty() {
@@ -310,7 +394,7 @@ impl eframe::App for FitsViewer {
                     }
 
                     if changed {
-                        self.rebuild_texture(ctx);
+                        self.rebuild_texture(&ctx);
                     }
                 });
             }
@@ -327,7 +411,7 @@ impl eframe::App for FitsViewer {
                 .collapsible(true)
                 .default_open(true)
                 .open(&mut open)
-                .show(ctx, |ui| {
+                .show(&ctx, |ui| {
                     egui::Grid::new("fits_info_grid")
                         .num_columns(2)
                         .spacing([12.0, 4.0])
@@ -346,7 +430,7 @@ impl eframe::App for FitsViewer {
             self.show_info = open;
         }
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show_inside(ui, |ui| {
             if let Some(texture) = &self.texture {
                 // Scroll to zoom.
                 let scroll_delta = ctx.input(|i| i.smooth_scroll_delta.y);
@@ -363,7 +447,7 @@ impl eframe::App for FitsViewer {
                 });
             } else {
                 ui.centered_and_justified(|ui| {
-                    ui.label("Click \"Open…\" to load a FITS file.");
+                    ui.label("Click \"Open…\" to load a FITS or XISF file.");
                 });
             }
         });
@@ -612,5 +696,97 @@ fn extract_fits_info(hdu: &HDU) -> Vec<(String, String)> {
             seen_labels.insert(label);
         }
     }
+    rows
+}
+
+/// Convert XISF `PixelData` to a flat `Vec<f32>`, taking at most `count` samples.
+/// Data from rxisf is always planar after decoding, so the layout is plane0 | plane1 | ...
+fn xisf_pixel_data_to_f32(data: &rxisf::PixelData, count: usize) -> Vec<f32> {
+    match data {
+        rxisf::PixelData::UInt8(v) => v.iter().take(count).map(|&x| x as f32).collect(),
+        rxisf::PixelData::UInt16(v) => v.iter().take(count).map(|&x| x as f32).collect(),
+        rxisf::PixelData::UInt32(v) => v.iter().take(count).map(|&x| x as f32).collect(),
+        rxisf::PixelData::UInt64(v) => v.iter().take(count).map(|&x| x as f32).collect(),
+        rxisf::PixelData::Float32(v) => v.iter().take(count).copied().collect(),
+        rxisf::PixelData::Float64(v) => v.iter().take(count).map(|&x| x as f32).collect(),
+        rxisf::PixelData::Complex32(_) | rxisf::PixelData::Complex64(_) => {
+            vec![0.0f32; count.min(data.len())]
+        }
+    }
+}
+
+/// Extract human-readable metadata from an XISF image (FITS keywords + key properties).
+fn extract_xisf_info(img: &rxisf::XisfImage) -> Vec<(String, String)> {
+    const WANTED: &[(&str, &str)] = &[
+        ("OBJECT", "Object"),
+        ("TARGNAME", "Target"),
+        ("DATE-OBS", "Date (obs)"),
+        ("DATE-BEG", "Date (begin)"),
+        ("EXPTIME", "Exposure"),
+        ("EXPOSURE", "Exposure"),
+        ("TELESCOP", "Telescope"),
+        ("INSTRUME", "Instrument"),
+        ("FILTER", "Filter"),
+        ("OBSERVER", "Observer"),
+        ("RA", "RA"),
+        ("DEC", "Dec"),
+        ("EQUINOX", "Equinox"),
+    ];
+
+    let kv: std::collections::HashMap<String, String> = img
+        .fits_keywords
+        .iter()
+        .map(|k| {
+            let val = k.value.trim().trim_matches('\'').trim().to_string();
+            (k.name.clone(), val)
+        })
+        .collect();
+
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut rows: Vec<(String, String)> = Vec::new();
+
+    for &(key, label) in WANTED {
+        if seen.contains(label) {
+            continue;
+        }
+        if let Some(val) = kv.get(key) {
+            if !val.is_empty() {
+                rows.push((label.to_string(), val.clone()));
+                seen.insert(label);
+            }
+        }
+    }
+
+    // XISF properties supplement missing FITS keywords
+    macro_rules! prop_row {
+        ($label:expr, $val:expr) => {
+            if !seen.contains($label) {
+                if let Some(v) = $val {
+                    rows.push(($label.to_string(), v.to_string()));
+                    seen.insert($label);
+                }
+            }
+        };
+    }
+
+    prop_row!("Object", img.observation_object_name());
+    prop_row!("Observer", img.observer_name());
+    prop_row!("Telescope", img.instrument_telescope_name());
+    prop_row!("Camera", img.instrument_camera_name());
+    prop_row!("Date (obs)", img.observation_time_start());
+    prop_row!(
+        "Exposure",
+        img.instrument_exposure_time().map(|v| format!("{v:.3} s"))
+    );
+
+    // Always append geometry
+    rows.push(("Width (px)".into(), img.geometry.width.to_string()));
+    rows.push(("Height (px)".into(), img.geometry.height.to_string()));
+    rows.push(("Channels".into(), img.geometry.channel_count.to_string()));
+    rows.push((
+        "Sample format".into(),
+        img.sample_format.as_xisf_str().to_string(),
+    ));
+
     rows
 }
