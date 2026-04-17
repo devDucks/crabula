@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=0.1.0
+Type=Application
+Name=Crabula
+GenericName=Astronomical Image Viewer
+Comment=Visualize FITS/XISF images and apply simple image stretching
+Exec=crabula %F
+Icon=crabula
+Terminal=false
+Categories=Graphics;Science;Astronomy;
+Keywords=astronomy;fits;xisf;image;viewer;astrophotography;stretching;
+StartupNotify=true
+MimeType=image/fits;application/fits;application/x-fits;application/xisf;
