@@ -475,11 +475,10 @@ fn extract_image(hdu: &HDU) -> Option<(usize, usize, usize, Vec<f32>)> {
         if h.key[8] != b'=' {
             continue;
         }
-        let keyword = std::str::from_utf8(&h.key[..8]).unwrap_or("").trim_end();
-        let raw_val = std::str::from_utf8(&h.value).unwrap_or("");
+        let raw_val = std::str::from_utf8(&h.value.val).unwrap_or("");
         let val = raw_val.split('/').next().unwrap_or("").trim();
 
-        match keyword {
+        match h.key() {
             "BITPIX" => bitpix = val.parse().unwrap_or(0),
             "NAXIS" => naxis = val.parse().unwrap_or(0),
             "NAXIS1" => naxis1 = val.parse().unwrap_or(0),
@@ -552,7 +551,7 @@ fn extract_bayer_pattern(hdu: &HDU) -> Option<String> {
         }
         let keyword = std::str::from_utf8(&h.key[..8]).unwrap_or("").trim_end();
         if keyword == "BAYERPAT" {
-            let raw_val = std::str::from_utf8(&h.value).unwrap_or("");
+            let raw_val = std::str::from_utf8(&h.value.val).unwrap_or("");
             let val = raw_val
                 .split('/')
                 .next()
@@ -671,7 +670,7 @@ fn extract_fits_info(hdu: &HDU) -> Vec<(String, String)> {
             .unwrap_or("")
             .trim_end()
             .to_string();
-        let raw_val = std::str::from_utf8(&h.value).unwrap_or("");
+        let raw_val = std::str::from_utf8(&h.value.val).unwrap_or("");
         let val = raw_val
             .split('/')
             .next()
